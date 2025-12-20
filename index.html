@@ -1,0 +1,983 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>ai-Ndraft • xtina edition</title>
+    <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/dompurify@3.1.6/dist/purify.min.js"></script>
+    
+    <style>
+        :root {
+            --card-min-height: 220px;
+            --primary: #c41e3a; /* Deep dark red */
+            --bg: #121212;
+            --card-bg: #1e1e1e;
+            --text: #f5f5f5;
+            --border: #333;
+            --shadow: 0 4px 16px rgba(196,30,58,0.2);
+            --radius: 16px;
+        }
+
+        [data-theme="light"] {
+            --bg: #f8f9fa;
+            --card-bg: #ffffff;
+            --text: #222;
+            --border: #ddd;
+            --shadow: 0 4px 16px rgba(196,30,58,0.15);
+        }
+
+        * { box-sizing: border-box; }
+
+        body {
+            margin: 0;
+            font-family: system-ui, sans-serif;
+            background: var(--bg);
+            color: var(--text);
+            min-height: 100vh;
+        }
+
+        #grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+            gap: 16px;
+            padding: 16px 16px 120px;
+            padding-top: 70px;
+        }
+
+        .flip-card {
+            min-height: var(--card-min-height);
+            perspective: 1000px;
+            border-radius: var(--radius);
+            overflow: hidden;
+            box-shadow: var(--shadow);
+            background: var(--card-bg);
+            border: 1px solid var(--border);
+        }
+
+        .flip-card.new {
+            opacity: 0;
+            transform: scale(0.95);
+            animation: appear 0.4s ease forwards;
+        }
+
+        @keyframes appear { to { opacity: 1; transform: scale(1); } }
+
+        .flip-card-inner {
+            width: 100%;
+            height: 100%;
+            transition: transform 0.6s;
+            transform-style: preserve-3d;
+        }
+
+        .flipped .flip-card-inner { transform: rotateY(180deg); }
+
+        .card-face {
+            position: absolute;
+            inset: 0;
+            backface-visibility: hidden;
+            display: flex;
+            flex-direction: column;
+            padding: 16px;
+            overflow-y: auto;
+            font-size: 15px;
+            line-height: 1.6;
+        }
+
+        .card-back { transform: rotateY(180deg); }
+
+        .flip-card.selected {
+            outline: 4px solid var(--primary);
+            outline-offset: -4px;
+            transform: scale(1.02);
+        }
+
+        #selectionBar {
+            position: fixed;
+            top: 0;
+            left: 0;
+            right: 0;
+            background: var(--card-bg);
+            border-bottom: 1px solid var(--border);
+            padding: 12px;
+            z-index: 1000;
+            display: none;
+            align-items: center;
+            justify-content: space-between;
+            box-shadow: var(--shadow);
+        }
+
+        #selectionBar.active { display: flex; }
+
+        #mergeSelected {
+            background: var(--primary);
+            color: white;
+            border: none;
+            padding: 8px 16px;
+            border-radius: 8px;
+            cursor: pointer;
+            font-size: 20px;
+        }
+
+        .fullscreen-overlay {
+            position: fixed;
+            inset: 0;
+            background: rgba(0,0,0,0.95);
+            display: none;
+            z-index: 10000;
+            align-items: center;
+            justify-content: center;
+            backdrop-filter: blur(8px);
+        }
+
+        .fullscreen-overlay.active { display: flex; }
+
+        .fullscreen-card {
+            width: 95%;
+            max-width: 1000px;
+            height: 95vh;
+            background: var(--card-bg);
+            border-radius: 20px;
+            overflow: hidden;
+            perspective: 2000px;
+            border: 1px solid var(--border);
+        }
+
+        .fullscreen-inner {
+            position: relative;
+            width: 100%;
+            height: 100%;
+            transition: transform 0.6s;
+            transform-style: preserve-3d;
+        }
+
+        .fullscreen-overlay.flipped .fullscreen-inner { transform: rotateY(180deg); }
+
+        .fullscreen-face {
+            position: absolute;
+            inset: 0;
+            backface-visibility: hidden;
+            display: flex;
+            flex-direction: column;
+        }
+
+        .fullscreen-back { transform: rotateY(180deg); }
+
+        .fullscreen-header {
+            padding: 16px 24px;
+            border-bottom: 1px solid var(--border);
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        .fullscreen-btn {
+            background: none;
+            border: none;
+            font-size: 28px;
+            cursor: pointer;
+            padding: 8px;
+            opacity: 0.7;
+            color: var(--text);
+        }
+
+        .fullscreen-btn:hover { opacity: 1; }
+
+        .fullscreen-content {
+            flex: 1;
+            padding: 24px;
+            overflow-y: auto;
+            font-size: 16px;
+            line-height: 1.7;
+        }
+
+        .streaming { text-align: center; color: #aaa; padding: 20px; margin-top: 20px; }
+        .cursor { display: inline-block; width: 3px; height: 1em; background: currentColor; animation: blink 1s infinite; vertical-align: middle; }
+        @keyframes blink { 50% { opacity: 0; } }
+
+        #inputPanel {
+            position: fixed;
+            bottom: 0;
+            left: 0;
+            right: 0;
+            background: var(--card-bg);
+            border-top: 1px solid var(--border);
+            padding: 16px;
+            box-shadow: 0 -4px 20px rgba(0,0,0,0.3);
+        }
+
+        .input-container {
+            display: flex;
+            gap: 12px;
+            max-width: 1200px;
+            margin: 0 auto;
+            align-items: center;
+        }
+
+        #userInput {
+            flex: 1;
+            padding: 14px;
+            border: 1px solid var(--border);
+            border-radius: 12px;
+            font-size: 16px;
+            background: var(--bg);
+            color: var(--text);
+        }
+
+        #sendBtn {
+            background: var(--primary);
+            color: white;
+            border: none;
+            padding: 14px 24px;
+            border-radius: 12px;
+            cursor: pointer;
+            font-size: 18px;
+            font-weight: bold;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        #sendBtn:hover {
+            background: #a1172f;
+        }
+
+        #moreBtn {
+            position: fixed;
+            bottom: 120px;
+            right: 20px;
+            width: 56px;
+            height: 56px;
+            border-radius: 50%;
+            background: var(--card-bg);
+            border: 1px solid var(--border);
+            font-size: 28px;
+            cursor: pointer;
+            box-shadow: var(--shadow);
+            z-index: 900;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+
+        .modal {
+            position: fixed;
+            inset: 0;
+            background: rgba(0,0,0,0.6);
+            display: none;
+            align-items: center;
+            justify-content: center;
+            z-index: 1000;
+            backdrop-filter: blur(5px);
+        }
+
+        .modal.active { display: flex; }
+
+        .modal-content {
+            background: var(--card-bg);
+            border-radius: var(--radius);
+            padding: 24px;
+            width: 90%;
+            max-width: 600px;
+            box-shadow: var(--shadow);
+            border: 1px solid var(--border);
+        }
+
+        textarea {
+            width: 100%;
+            min-height: 180px;
+            padding: 12px;
+            border: 1px solid var(--border);
+            border-radius: 8px;
+            font-family: inherit;
+            font-size: 15px;
+            background: var(--bg);
+            color: var(--text);
+            resize: vertical;
+            margin-bottom: 16px;
+        }
+
+        .modal-actions {
+            display: flex;
+            gap: 12px;
+            justify-content: flex-end;
+        }
+
+        .modal-actions button {
+            padding: 10px 16px;
+            border-radius: 8px;
+            cursor: pointer;
+            border: none;
+            font-size: 18px;
+            min-width: 50px;
+        }
+
+        .modal-actions button.primary {
+            background: var(--primary);
+            color: white;
+        }
+
+        .modal-actions button.secondary {
+            background: transparent;
+            color: var(--text);
+            border: 1px solid var(--border);
+        }
+
+        #cardMenu {
+            position: fixed;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            background: var(--card-bg);
+            border-radius: var(--radius);
+            box-shadow: var(--shadow);
+            padding: 16px;
+            display: none;
+            flex-direction: column;
+            gap: 12px;
+            z-index: 100;
+        }
+
+        #cardMenu.active { display: flex; }
+
+        .menu-btn {
+            background: none;
+            border: none;
+            font-size: 32px;
+            cursor: pointer;
+            padding: 16px;
+            border-radius: 12px;
+            width: 72px;
+            height: 72px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+
+        .menu-btn:hover {
+            background: rgba(196,30,58,0.1);
+        }
+
+        #loading {
+            position: fixed;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%,-50%);
+            background: rgba(0,0,0,0.8);
+            color: white;
+            padding: 20px 40px;
+            border-radius: 12px;
+            display: none;
+            z-index: 2000;
+        }
+
+        #loading.show { display: block; }
+
+        #brandPlaceholder {
+            position: fixed;
+            top: 80px;
+            left: 16px;
+            z-index: 100;
+            pointer-events: none;
+            font-size: 42px;
+            font-weight: 900;
+            color: rgba(196,30,58,0.3);
+            transform: rotate(-12deg);
+            user-select: none;
+        }
+    </style>
+</head>
+<body>
+    <div id="brandPlaceholder">xtina ❤️</div>
+
+    <div id="selectionBar">
+        <button id="cancelSelect">✕</button>
+        <span id="selectCount">0</span>
+        <button id="mergeSelected">Combine</button>
+    </div>
+
+    <div class="fullscreen-overlay" id="fullscreenOverlay">
+        <div class="fullscreen-card">
+            <div class="fullscreen-inner">
+                <div class="fullscreen-face">
+                    <div class="fullscreen-header">
+                        <button class="fullscreen-btn fullscreen-flip">↔</button>
+                        <button class="fullscreen-btn fullscreen-close">✕</button>
+                    </div>
+                    <div class="fullscreen-content" id="fsQuestion"></div>
+                </div>
+                <div class="fullscreen-face fullscreen-back">
+                    <div class="fullscreen-header">
+                        <button class="fullscreen-btn fullscreen-flip">↔</button>
+                        <button class="fullscreen-btn fullscreen-close">✕</button>
+                    </div>
+                    <div class="fullscreen-content" id="fsResponse"></div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div id="grid"></div>
+
+    <div id="loading">Igniting response...</div>
+
+    <button id="moreBtn">⚙</button>
+
+    <div class="modal" id="moreModal">
+        <div class="modal-content">
+            <div class="modal-actions">
+                <button id="toggleThemeBtn" title="Toggle Theme">🌙</button>
+                <button id="modalExport" title="Export">📤</button>
+                <button id="modalImport" title="Import">📥</button>
+                <button id="modalClose" class="secondary" title="Close">✕</button>
+            </div>
+            <input type="file" id="fileInput" style="display:none;" accept=".json">
+        </div>
+    </div>
+
+    <div id="cardMenu">
+        <button class="menu-btn" data-action="continue" title="Continue">↻</button>
+        <button class="menu-btn" data-action="copy" title="Copy Response">📋</button>
+        <button class="menu-btn" data-action="ai-edit" title="AI Edit">✨</button>
+        <button class="menu-btn" data-action="manual-edit-response" title="Edit Response">✏</button>
+        <button class="menu-btn" data-action="manual-edit-question" title="Edit Question">📝</button>
+        <button class="menu-btn" data-action="split" title="Split">✂</button>
+        <button class="menu-btn" data-action="fullscreen" title="Fullscreen">⛶</button>
+        <button class="menu-btn" data-action="delete" title="Delete">🗑</button>
+    </div>
+
+    <div class="modal" id="textEditorModal">
+        <div class="modal-content">
+            <h3>Edit</h3>
+            <textarea id="textEditorArea"></textarea>
+            <div class="modal-actions">
+                <button id="textEditorCancel" class="secondary">✕</button>
+                <button id="textEditorSave" class="primary">✓</button>
+            </div>
+        </div>
+    </div>
+
+    <div class="modal" id="mergePromptModal">
+        <div class="modal-content">
+            <h3>Merge</h3>
+            <textarea id="mergePromptText" placeholder="Optional instructions"></textarea>
+            <div class="modal-actions">
+                <button id="mergePromptCancel" class="secondary">✕</button>
+                <button id="mergePromptConfirm" class="primary">Combine</button>
+            </div>
+        </div>
+    </div>
+
+    <div class="modal" id="continuePromptModal">
+        <div class="modal-content">
+            <h3>Continue</h3>
+            <textarea id="continuePromptText" placeholder="Optional instructions"></textarea>
+            <div class="modal-actions">
+                <button id="continuePromptCancel" class="secondary">✕</button>
+                <button id="continuePromptConfirm" class="primary">Go</button>
+            </div>
+        </div>
+    </div>
+
+    <div class="modal" id="splitPromptModal">
+        <div class="modal-content">
+            <h3>Split</h3>
+            <textarea id="splitPromptText" placeholder="Optional instructions"></textarea>
+            <div class="modal-actions">
+                <button id="splitPromptCancel" class="secondary">✕</button>
+                <button id="splitPromptConfirm" class="primary">Go</button>
+            </div>
+        </div>
+    </div>
+
+    <div class="modal" id="editPromptModal">
+        <div class="modal-content">
+            <h3>AI Edit</h3>
+            <textarea id="editPromptText" placeholder="What changes?"></textarea>
+            <div class="modal-actions">
+                <button id="editPromptCancel" class="secondary">✕</button>
+                <button id="editPromptConfirm" class="primary">Go</button>
+            </div>
+        </div>
+    </div>
+
+    <div id="inputPanel">
+        <div class="input-container">
+            <input type="text" id="userInput" placeholder="Hey xtina, spark something? 🔥">
+            <button id="sendBtn">Ignite 🔥</button>
+        </div>
+    </div>
+
+    <script>
+        const PROXY_URL = "https://ai-proxy.ai-n.workers.dev/api/generate";
+
+        const SYSTEM_PROMPT = `You are a super fun, enthusiastic, and encouraging AI assistant made especially for xtina.
+Talk directly to her — use her name "xtina" often! Be warm, playful, and full of energy.
+Sprinkle in phrases like "wow", "golly", "oh man", and especially "free is for me!" when they fit naturally.
+You're always excited to help her brainstorm, write, create — anything!
+Respond in clean markdown when helpful. Keep things light, positive, and creative.`;
+
+        class App {
+            constructor() {
+                this.cards = [];
+                this.sessionId = "s-" + Date.now();
+                this.streamingId = null;
+                this.selected = new Set();
+                this.selectMode = false;
+                this.fullscreenId = null;
+                this.currentMenuId = null;
+                this.currentContinueId = null;
+                this.currentSplitId = null;
+                this.currentEditId = null;
+                this.editingCardId = null;
+                this.editingField = null;
+                this.decoder = new TextDecoder();
+                this.init();
+            }
+
+            init() {
+                this.load();
+                this.bind();
+                const theme = localStorage.getItem('theme') || 'dark'; // default dark to match new palette
+                document.body.dataset.theme = theme;
+            }
+
+            bind() {
+                document.getElementById('sendBtn').onclick = () => this.send();
+                document.getElementById('userInput').onkeydown = e => { 
+                    if (e.key === 'Enter' && !e.shiftKey) { 
+                        e.preventDefault(); 
+                        this.send(); 
+                    } 
+                };
+
+                document.getElementById('moreBtn').onclick = () => {
+                    document.getElementById('moreModal').classList.add('active');
+                };
+
+                document.getElementById('modalClose').onclick = () => document.getElementById('moreModal').classList.remove('active');
+
+                document.getElementById('toggleThemeBtn').onclick = () => {
+                    const current = document.body.dataset.theme;
+                    const newTheme = current === 'dark' ? 'light' : 'dark';
+                    document.body.dataset.theme = newTheme;
+                    localStorage.setItem('theme', newTheme);
+                };
+
+                document.getElementById('modalExport').onclick = () => this.export();
+                document.getElementById('modalImport').onclick = () => document.getElementById('fileInput').click();
+                document.getElementById('fileInput').onchange = e => this.import(e);
+
+                document.querySelectorAll('.fullscreen-close').forEach(b => b.onclick = () => this.closeFS());
+                document.querySelectorAll('.fullscreen-flip').forEach(b => b.onclick = () => document.getElementById('fullscreenOverlay').classList.toggle('flipped'));
+
+                document.getElementById('cancelSelect').onclick = () => this.exitSelect();
+                document.getElementById('mergeSelected').onclick = () => document.getElementById('mergePromptModal').classList.add('active');
+
+                document.getElementById('mergePromptCancel').onclick = () => document.getElementById('mergePromptModal').classList.remove('active');
+                document.getElementById('mergePromptConfirm').onclick = () => this.merge();
+
+                document.getElementById('continuePromptCancel').onclick = () => document.getElementById('continuePromptModal').classList.remove('active');
+                document.getElementById('continuePromptConfirm').onclick = () => this.continue();
+
+                document.getElementById('splitPromptCancel').onclick = () => document.getElementById('splitPromptModal').classList.remove('active');
+                document.getElementById('splitPromptConfirm').onclick = () => this.split();
+
+                document.getElementById('editPromptCancel').onclick = () => document.getElementById('editPromptModal').classList.remove('active');
+                document.getElementById('editPromptConfirm').onclick = () => this.performEdit();
+
+                document.getElementById('textEditorCancel').onclick = () => document.getElementById('textEditorModal').classList.remove('active');
+                document.getElementById('textEditorSave').onclick = () => this.saveManualEdit();
+
+                document.getElementById('cardMenu').onclick = e => {
+                    const btn = e.target.closest('.menu-btn');
+                    if (btn) {
+                        const action = btn.dataset.action;
+                        if (action.startsWith('manual-edit-')) {
+                            const field = action === 'manual-edit-question' ? 'q' : 'r';
+                            this.editText(this.currentMenuId, field);
+                        } else {
+                            this.handle(action);
+                        }
+                        document.getElementById('cardMenu').classList.remove('active');
+                    }
+                };
+            }
+
+            async send() {
+                const input = document.getElementById('userInput').value.trim();
+                if (!input) return;
+                document.getElementById('userInput').value = '';
+
+                const id = this.add({ q: input, r: '...' }, true);
+                this.streamingId = id;
+                await this.request(input);
+            }
+
+            async request(prompt) {
+                try {
+                    document.getElementById('loading').classList.add('show');
+                    const payload = { sessionId: this.sessionId, prompt: SYSTEM_PROMPT + "\n\n" + prompt };
+                    const reader = await this.fetchProxy(payload);
+                    await this.stream(reader);
+                } catch (e) {
+                    this.update(this.streamingId, `<p style="color:red">Error: ${e.message}</p>`);
+                } finally {
+                    document.getElementById('loading').classList.remove('show');
+                    this.streamingId = null;
+                }
+            }
+
+            async fetchProxy(payload) {
+                const res = await fetch(PROXY_URL, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(payload)
+                });
+                if (!res.ok) throw new Error(await res.text().catch(() => res.statusText));
+                return res.body.getReader();
+            }
+
+            async stream(reader) {
+                let buffer = '', acc = '';
+                while (true) {
+                    const { done, value } = await reader.read();
+                    if (done) break;
+                    buffer += this.decoder.decode(value, { stream: true });
+                    const parts = buffer.split('\n\n');
+                    buffer = parts.pop() || '';
+                    for (const part of parts) {
+                        const line = part.split('\n').find(l => l.startsWith('data:'));
+                        if (!line) continue;
+                        const data = line.slice(6).trim();
+                        if (data === '[DONE]') {
+                            const clean = acc.trim();
+                            this.finalize(this.streamingId, clean);
+                            return;
+                        }
+                        try {
+                            const json = JSON.parse(data);
+                            const c = json.choices?.[0]?.delta?.content;
+                            if (c) {
+                                acc += c;
+                                this.update(this.streamingId, this.md(acc));
+                            }
+                        } catch {}
+                    }
+                }
+            }
+
+            finalize(id, text) {
+                const html = text ? this.md(text) : '<em>Empty</em>';
+                this.update(id, html);
+                const card = this.cards.find(c => c.id === id);
+                if (card) card.r = text;
+                this.save();
+            }
+
+            update(id, html) {
+                const gridEl = document.querySelector(`[data-id="${id}"] .response-content`);
+                const fsEl = document.getElementById('fsResponse');
+                const fullHtml = html + (this.streamingId === id ? '<div class="streaming"><span class="cursor"></span></div>' : '');
+
+                if (gridEl) {
+                    gridEl.innerHTML = fullHtml;
+                    gridEl.scrollTop = gridEl.scrollHeight;
+                }
+                if (this.fullscreenId === id && fsEl) {
+                    fsEl.innerHTML = fullHtml;
+                    fsEl.scrollTop = fsEl.scrollHeight;
+                }
+            }
+
+            add(data, fs = false) {
+                const id = crypto.randomUUID();
+                const card = { id, q: data.q, r: data.r || '' };
+                this.cards.push(card);
+                this.render(card, true);
+                if (fs) this.openFS(id, true);
+                this.save();
+                return id;
+            }
+
+            render(card, newCard = false) {
+                const el = document.createElement('div');
+                el.className = `flip-card ${newCard ? 'new' : ''}`;
+                el.dataset.id = card.id;
+
+                const rhtml = (card.r === '...') 
+                    ? '<div class="streaming"><span class="cursor"></span></div>' 
+                    : this.md(card.r);
+
+                el.innerHTML = `
+                    <div class="flip-card-inner">
+                        <div class="card-face">${this.md(card.q)}</div>
+                        <div class="card-face card-back">
+                            <div class="response-content">${rhtml}</div>
+                        </div>
+                    </div>
+                `;
+
+                let timer;
+                el.ontouchstart = e => {
+                    if (e.touches.length === 1) timer = setTimeout(() => this.enterSelect(card.id, el), 600);
+                    if (e.touches.length === 2) { e.preventDefault(); this.currentMenuId = card.id; document.getElementById('cardMenu').classList.add('active'); }
+                };
+                el.ontouchend = el.ontouchmove = () => clearTimeout(timer);
+
+                el.onclick = e => {
+                    if (this.selectMode) { e.preventDefault(); this.toggleSelect(card.id, el); return; }
+                    el.classList.toggle('flipped');
+                };
+                el.ondblclick = () => this.openFS(card.id);
+
+                document.getElementById('grid').appendChild(el);
+                if (card.r && card.r !== '...') setTimeout(() => el.classList.add('flipped'), 100);
+            }
+
+            handle(action) {
+                const card = this.cards.find(c => c.id === this.currentMenuId);
+                if (!card) return;
+
+                if (action === 'continue') this.promptContinue(card.id);
+                if (action === 'copy') navigator.clipboard.writeText(card.r || '');
+                if (action === 'ai-edit') this.promptEdit(card.id);
+                if (action === 'split') this.promptSplit(card.id);
+                if (action === 'fullscreen') this.openFS(card.id);
+                if (action === 'delete') if (confirm('Delete?')) this.del(card.id);
+            }
+
+            editText(id, field) {
+                const card = this.cards.find(c => c.id === id);
+                if (!card) return;
+                this.editingCardId = id;
+                this.editingField = field;
+                document.getElementById('textEditorArea').value = field === 'q' ? card.q : card.r;
+                document.getElementById('textEditorModal').classList.add('active');
+            }
+
+            saveManualEdit() {
+                const text = document.getElementById('textEditorArea').value.trim();
+                const card = this.cards.find(c => c.id === this.editingCardId);
+                if (!card) return;
+
+                if (this.editingField === 'q') {
+                    card.q = text;
+                    document.querySelector(`[data-id="${this.editingCardId}"] .card-face:first-child`).innerHTML = this.md(text);
+                    if (this.fullscreenId === this.editingCardId) {
+                        document.getElementById('fsQuestion').innerHTML = this.md(text);
+                    }
+                } else {
+                    card.r = text;
+                    const html = this.md(text);
+                    document.querySelector(`[data-id="${this.editingCardId}"] .response-content`).innerHTML = html;
+                    if (this.fullscreenId === this.editingCardId) {
+                        document.getElementById('fsResponse').innerHTML = html;
+                    }
+                }
+
+                this.save();
+                document.getElementById('textEditorModal').classList.remove('active');
+            }
+
+            promptContinue(id) {
+                this.currentContinueId = id;
+                document.getElementById('continuePromptText').value = '';
+                document.getElementById('continuePromptModal').classList.add('active');
+            }
+
+            async continue() {
+                const card = this.cards.find(c => c.id === this.currentContinueId);
+                if (!card) return;
+
+                const custom = document.getElementById('continuePromptText').value.trim();
+                const context = `User request: \( {card.q}\n\nPrevious response:\n \){card.r || ''}`;
+                const prompt = custom 
+                    ? `${context}\n\nAdditional instructions: ${custom}\n\nContinue the response:`
+                    : `${context}\n\nContinue the response naturally from where it left off:`;
+
+                const id = this.add({ q: `Continued from: ${card.q.slice(0, 30)}...`, r: '...' }, true);
+                this.streamingId = id;
+                await this.request(prompt);
+                document.getElementById('continuePromptModal').classList.remove('active');
+            }
+
+            promptSplit(id) {
+                this.currentSplitId = id;
+                document.getElementById('splitPromptText').value = '';
+                document.getElementById('splitPromptModal').classList.add('active');
+            }
+
+            async split() {
+                const card = this.cards.find(c => c.id === this.currentSplitId);
+                if (!card) return;
+
+                const custom = document.getElementById('splitPromptText').value.trim();
+                const prompt = custom 
+                    ? `Split the text below according to these instructions: \( {custom}\n\nText:\n \){card.r}`
+                    : `Split the following text into clear, logical sections with descriptive titles:\n\n${card.r}`;
+
+                const id = this.add({ q: `Split from: ${card.q.slice(0, 30)}...`, r: '...' }, true);
+                this.streamingId = id;
+                await this.request(prompt);
+                document.getElementById('splitPromptModal').classList.remove('active');
+            }
+
+            promptEdit(id) {
+                this.currentEditId = id;
+                document.getElementById('editPromptText').value = '';
+                document.getElementById('editPromptModal').classList.add('active');
+            }
+
+            async performEdit() {
+                const card = this.cards.find(c => c.id === this.currentEditId);
+                if (!card) return;
+
+                const instructions = document.getElementById('editPromptText').value.trim() || 'Improve clarity, flow, and structure';
+                const prompt = `Original request: \( {card.q}\n\nCurrent response:\n \){card.r || ''}\n\nInstructions: ${instructions}\n\nOutput only the revised response:`;
+
+                const id = this.add({ q: `Edited: ${card.q.slice(0, 30)}...`, r: '...' }, true);
+                this.streamingId = id;
+                await this.request(prompt);
+                document.getElementById('editPromptModal').classList.remove('active');
+            }
+
+            merge() {
+                if (this.selected.size < 2) return;
+
+                const sel = Array.from(this.selected).map(id => this.cards.find(c => c.id === id));
+                const content = sel.map(c => c.r || '').join('\n\n');
+                const custom = document.getElementById('mergePromptText').value.trim();
+
+                let prompt;
+                if (custom) {
+                    prompt = `Merge the following texts into one cohesive response based on these instructions: ${custom}
+
+Texts to merge:
+${content}
+
+Merged response (output only the final content):`;
+                } else {
+                    prompt = `The following are multiple response drafts. Combine them into one single, coherent, well-written response. Keep all key details and improve the overall flow.
+
+Drafts:
+${content}
+
+Final merged response (output only the content):`;
+                }
+
+                const id = this.add({ q: `Merged ${sel.length} cards`, r: '...' }, true);
+                this.streamingId = id;
+                this.request(prompt);
+                document.getElementById('mergePromptModal').classList.remove('active');
+                this.exitSelect();
+            }
+
+            openFS(id, back = false) {
+                const card = this.cards.find(c => c.id === id);
+                if (!card) return;
+
+                document.getElementById('fsQuestion').innerHTML = this.md(card.q);
+                const responseEl = document.getElementById('fsResponse');
+                const baseHtml = (card.r && card.r !== '...') ? this.md(card.r) : '<div class="streaming"><span class="cursor"></span></div>';
+                responseEl.innerHTML = baseHtml + (this.streamingId === id ? '<div class="streaming"><span class="cursor"></span></div>' : '');
+
+                const ov = document.getElementById('fullscreenOverlay');
+                ov.classList.add('active');
+                if (back) ov.classList.add('flipped');
+                else ov.classList.remove('flipped');
+                this.fullscreenId = id;
+                document.body.style.overflow = 'hidden';
+            }
+
+            closeFS() {
+                document.getElementById('fullscreenOverlay').classList.remove('active', 'flipped');
+                this.fullscreenId = null;
+                document.body.style.overflow = '';
+            }
+
+            del(id) {
+                this.cards = this.cards.filter(c => c.id !== id);
+                document.querySelector(`[data-id="${id}"]`)?.remove();
+                if (this.fullscreenId === id) this.closeFS();
+                this.save();
+            }
+
+            enterSelect(id, el) {
+                this.selectMode = true;
+                this.selected.clear();
+                this.toggleSelect(id, el);
+            }
+
+            toggleSelect(id, el) {
+                el.classList.toggle('selected');
+                if (this.selected.has(id)) this.selected.delete(id);
+                else this.selected.add(id);
+
+                document.getElementById('selectCount').textContent = this.selected.size;
+                document.getElementById('mergeSelected').style.display = this.selected.size >= 2 ? 'block' : 'none';
+                document.getElementById('selectionBar').classList.toggle('active', this.selected.size > 0);
+            }
+
+            exitSelect() {
+                this.selectMode = false;
+                this.selected.clear();
+                document.querySelectorAll('.flip-card.selected').forEach(e => e.classList.remove('selected'));
+                document.getElementById('selectionBar').classList.remove('active');
+            }
+
+            export() {
+                const data = { cards: this.cards, sessionId: this.sessionId };
+                const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
+                const url = URL.createObjectURL(blob);
+                const a = document.createElement('a');
+                a.href = url;
+                a.download = 'ai-ndraft.json';
+                a.click();
+                URL.revokeObjectURL(url);
+            }
+
+            import(e) {
+                const file = e.target.files[0];
+                if (!file) return;
+                const r = new FileReader();
+                r.onload = ev => {
+                    try {
+                        const d = JSON.parse(ev.target.result);
+                        this.cards = d.cards || [];
+                        this.sessionId = d.sessionId || this.sessionId;
+                        document.getElementById('grid').innerHTML = '';
+                        this.cards.forEach(c => this.render(c));
+                        this.save();
+                    } catch (err) {
+                        alert('Import failed');
+                    }
+                };
+                r.readAsText(file);
+            }
+
+            save() { 
+                localStorage.setItem('data', JSON.stringify({ cards: this.cards, sessionId: this.sessionId })); 
+            }
+
+            load() {
+                const raw = localStorage.getItem('data');
+                if (raw) {
+                    try {
+                        const d = JSON.parse(raw);
+                        this.cards = d.cards || [];
+                        this.sessionId = d.sessionId || this.sessionId;
+                        this.cards.forEach(c => this.render(c));
+                    } catch (err) {
+                        console.error('Load failed:', err);
+                    }
+                }
+            }
+
+            md(t) { return t ? DOMPurify.sanitize(marked.parse(t)) : ''; }
+        }
+
+        document.addEventListener('DOMContentLoaded', () => new App());
+    </script>
+</body>
+  </html>
